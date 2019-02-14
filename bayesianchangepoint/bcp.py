@@ -84,6 +84,7 @@ def inference(x, hazard_func, mu0=0, kappa0=1, alpha0=1, beta0=1):
           - Also, Kevin Murphy's lecture notes.
     """
 
+    # STEP 1
     # First, setup the matrix that will hold our beliefs about the current
     # run lengths.  We'll initialize it all to zero at first.  Obviously
     # we're assuming here that we know how long we're going to do the
@@ -94,27 +95,29 @@ def inference(x, hazard_func, mu0=0, kappa0=1, alpha0=1, beta0=1):
     # At time t=0, we actually have complete knowledge about the run
     # length.  It is definitely zero.  See the paper for other possible
     # boundary conditions.  'beliefs' is called 'R' in gaussdemo.m.
-    beliefs[0,0] = 1.0
+    beliefs[0, 0] = 1.0
 
     # Convert floats to arrays
-    mu0    = np.array([mu0])
+    mu0 = np.array([mu0])
     kappa0 = np.array([kappa0])
     alpha0 = np.array([alpha0])
-    beta0  = np.array([beta0])
+    beta0 = np.array([beta0])
 
     # Track the current set of parameters.  These start out at the prior and
     # accumulate data as we proceed.
-    muT    = mu0
+    muT = mu0
     kappaT = kappa0
     alphaT = alpha0
-    betaT  = beta0
+    betaT = beta0
 
     # Keep track of the maximums.
-    maxes  = np.zeros([x.size+1, x.size+1])
+    maxes = np.zeros([x.size+1, x.size+1])
 
+    # STEP 2
     # Loop over the data like we're seeing it all for the first time.
     for t in range(x.size):
 
+        # STEP 3
         # Evaluate the predictive distribution for the new datum under each of
         # the parameters.  This is the standard thing from Bayesian inference.
         predprobs = studentpdf(x[t], muT,
@@ -124,36 +127,40 @@ def inference(x, hazard_func, mu0=0, kappa0=1, alpha0=1, beta0=1):
         # Evaluate the hazard function for this interval.
         haz = hazard_func(np.arange(t+1))
 
+        # STEP 4
         # Evaluate the growth probabilities - shift the probabilities down and to
         # the right, scaled by the hazard function and the predictive
         # probabilities.
-        beliefs[1:t+2,t+1] = beliefs[0:t+1,t] * predprobs * (1-haz)
+        beliefs[1:t+2, t+1] = beliefs[0:t+1, t] * predprobs * (1-haz)
 
+        # STEP 5
         # Evaluate the probability that there *was* a changepoint and we're
         # accumulating the mass back down at beliefs = 0.
-        beliefs[0,t+1] = (beliefs[0:t+1,t] * predprobs * haz).sum()
+        beliefs[0, t+1] = (beliefs[0:t+1, t] * predprobs * haz).sum()
 
         # Renormalize the run length probabilities for improved numerical
         # stability.
-        beliefs[:,t+1] = beliefs[:,t+1] / beliefs[:,t+1].sum()
+        beliefs[:, t+1] = beliefs[:, t+1] / beliefs[:, t+1].sum()
 
+        # STEP 8
         # Update the parameter sets for each possible run length.
         # TODO: continue porting from here...
 
-        muT0    = np.concatenate([mu0   , (kappaT*muT + x[t]) / (kappaT+1) ])
-        kappaT0 = np.concatenate([kappa0, kappaT + 1 ])
-        alphaT0 = np.concatenate([alpha0, alphaT + 0.5 ])
-        betaT0  = np.concatenate([beta0 , kappaT +
-                                          (kappaT*(x[t]-muT)**2)/(2*(kappaT+1))])
-        muT     = muT0
-        kappaT  = kappaT0
-        alphaT  = alphaT0
-        betaT   = betaT0
+        muT0 = np.concatenate([mu0, (kappaT*muT + x[t]) / (kappaT+1)])
+        kappaT0 = np.concatenate([kappa0, kappaT + 1])
+        alphaT0 = np.concatenate([alpha0, alphaT + 0.5])
+        betaT0 = np.concatenate([beta0, kappaT +
+                                 (kappaT*(x[t]-muT)**2)/(2*(kappaT+1))])
+        muT = muT0
+        kappaT = kappaT0
+        alphaT = alphaT0
+        betaT = betaT0
 
         # Store the maximum, to plot later.
-        maxes[t] = np.where(beliefs[:,t]==beliefs[:,t].max())[0]
+        maxes[t] = np.where(beliefs[:, t] == beliefs[:, t].max())[0]
 
     return beliefs, maxes
+
 
 def generate_test_data(n, hazard_func, mu0=0, kappa0=1, alpha0=1, beta0=1):
     """
@@ -165,8 +172,8 @@ def generate_test_data(n, hazard_func, mu0=0, kappa0=1, alpha0=1, beta0=1):
       * x (np.ndarray of length n): data
       * changepoints (list of ints): indices of changepoints
     """
-    x = np.zeros(n) # this will hold the data
-    changepoints = [0] # Store the times of changepoints.  It's useful to see them.
+    x = np.zeros(n)  # this will hold the data
+    changepoints = [0]  # Store the times of changepoints.  It's useful to see them.
 
     def generate_params():
         # Generate the parameters of the Gaussian from the prior.
@@ -175,7 +182,7 @@ def generate_test_data(n, hazard_func, mu0=0, kappa0=1, alpha0=1, beta0=1):
         return curr_ivar, curr_mean
 
     curr_ivar, curr_mean = generate_params()
-    curr_run = 0 # Initial run length is zero
+    curr_run = 0  # Initial run length is zero
 
     # Now, loop forward in time and generate data.
     for t in range(n):
@@ -202,16 +209,17 @@ def generate_test_data(n, hazard_func, mu0=0, kappa0=1, alpha0=1, beta0=1):
 
     return x, changepoints
 
+
 def test(data_input='random'):
     # First, we will specify the prior.  We will then generate some fake data
     # from the prior specification.  We will then perform inference. Then
     # we'll plot some things.
 
-    hazard_func = lambda r: constant_hazard(r, _lambda=200)
+    def hazard_func(r): return constant_hazard(r, _lambda=200)
 
     if data_input == 'random':
         # generate test data
-        N = 100 # how many data points to generate?
+        N = 100  # how many data points to generate?
         x, changepoints = generate_test_data(N, hazard_func)
     elif data_input == 'ones':
         x = np.ones(N)
@@ -229,7 +237,7 @@ def test(data_input='random'):
 
     # plot
     fig = plt.figure()
-    ax = fig.add_subplot(2,1,1)
+    ax = fig.add_subplot(2, 1, 1)
     ax.plot(x)
     ylim = ax.get_ylim()
     for cp in changepoints:
@@ -240,8 +248,8 @@ def test(data_input='random'):
 
     # plot beliefs
     beliefs = beliefs.astype(np.float32)
-    #print(beliefs)
-    ax2 = fig.add_subplot(2,1,2, sharex=ax)
+    # print(beliefs)
+    ax2 = fig.add_subplot(2, 1, 2, sharex=ax)
     ax2.imshow(-np.log(beliefs), interpolation='none', aspect='auto',
                origin='lower', cmap=plt.cm.Blues)
     ax2.plot(maxes, color='r')
@@ -250,4 +258,4 @@ def test(data_input='random'):
     plt.draw()
     return beliefs, maxes
 
-#test()
+# test()
